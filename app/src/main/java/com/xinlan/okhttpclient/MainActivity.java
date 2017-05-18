@@ -19,19 +19,32 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Request req = new Request.Builder().url("https://www.baidu.com/").build();
-        Call call = mClient.newCall(req);
-
-        call.enqueue(new Callback() {
+        new Thread(new Runnable() {
             @Override
-            public void onFailure(Call call, IOException e) {
-
+            public void run() {
+                Request req = new Request.Builder().url("https://www.baidu.com").build();
+                Call call = mClient.newCall(req);
+                try {
+                    Response response  = call.execute();
+                    System.out.println("protocol--->"+response.protocol());
+                } catch (IOException e)  {
+                    e.printStackTrace();
+                }
             }
+        }).start();
 
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                //System.out.println("--->"+response.body().string());
-            }
-        });
+//        call.enqueue(new Callback() {
+//            @Override
+//            public void onFailure(Call call, IOException e) {
+//
+//            }
+//
+//            @Override
+//            public void onResponse(Call call, Response response) throws IOException {
+//                System.out.println("Thread--->"+Thread.currentThread().getName());
+//                //setTitle("haha");
+//                System.out.println("--->"+response.body().string());
+//            }
+//        });
     }
 }
