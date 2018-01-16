@@ -165,6 +165,11 @@ public final class Dispatcher {
         }
     }
 
+    /**
+     *
+     * ready队列中的任务 向 异步调度队列中转移
+     *
+     */
     private void promoteCalls() {
         if (runningAsyncCalls.size() >= maxRequests) return; // Already running max capacity.
         if (readyAsyncCalls.isEmpty()) return; // No ready calls to promote.
@@ -179,7 +184,7 @@ public final class Dispatcher {
             }
 
             if (runningAsyncCalls.size() >= maxRequests) return; // Reached max capacity.
-        }
+        }//end for each readyAsync call
     }
 
     /**

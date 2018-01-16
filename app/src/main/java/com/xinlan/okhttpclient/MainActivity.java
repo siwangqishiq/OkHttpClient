@@ -26,6 +26,18 @@ public class MainActivity extends AppCompatActivity {
                 Call call = mClient.newCall(req);
                 try {
                     Response response  = call.execute();
+                    call.enqueue(new Callback(){
+
+                        @Override
+                        public void onFailure(Call call, IOException e) {
+
+                        }
+
+                        @Override
+                        public void onResponse(Call call, Response response) throws IOException {
+
+                        }
+                    });
                     System.out.println("protocol--->"+response.protocol());
                 } catch (IOException e)  {
                     e.printStackTrace();
