@@ -56,6 +56,13 @@ import static okhttp3.internal.http.StatusLine.HTTP_TEMP_REDIRECT;
 /**
  * This interceptor recovers from failures and follows redirects as necessary. It may throw an
  * {@link IOException} if the call was canceled.
+ *
+ * 处理Http  3XX重定向
+ *                  401未授权
+ *                  408 请求超时
+ *
+ *
+ *
  */
 public final class RetryAndFollowUpInterceptor implements Interceptor {
     /**
@@ -106,12 +113,12 @@ public final class RetryAndFollowUpInterceptor implements Interceptor {
     public Response intercept(Chain chain) throws IOException {
         Request request = chain.request();
 
-        streamAllocation = new StreamAllocation(client.connectionPool(), createAddress(request.url()), callStackTrace);
+        streamAllocation = new StreamAllocation(client.connectionPool(), createAddress(request.url()), callStackTrace);//创建 用于分配Socket的StreamAllocation
 
         int followUpCount = 0;
         Response priorResponse = null;
         while (true) {
-            if (canceled) {
+            if (canceled) {//检测是否任务被取消
                 streamAllocation.release();
                 throw new IOException("Canceled");
             }
@@ -119,7 +126,7 @@ public final class RetryAndFollowUpInterceptor implements Interceptor {
             Response response = null;
             boolean releaseConnection = true;
             try {
-                response = ((RealInterceptorChain) chain).proceed(request, streamAllocation, null, null);
+                response = ((RealInterceptorChain) chain).proceed(request, streamAllocation, null, null);//将任务转交给后面的责任链
                 releaseConnection = false;
             } catch (RouteException e) {
                 // The attempt to connect via a route failed. The request will not have been sent.
@@ -151,7 +158,7 @@ public final class RetryAndFollowUpInterceptor implements Interceptor {
                         .build();
             }
 
-            Request followUp = followUpRequest(response);
+            Request followUp = followUpRequest(response);//处理重定向   授权头 等Http协议中的情况
 
             if (followUp == null) {
                 if (!forWebSocket) {
@@ -172,7 +179,7 @@ public final class RetryAndFollowUpInterceptor implements Interceptor {
                 throw new HttpRetryException("Cannot retry streamed HTTP body", response.code());
             }
 
-            if (!sameConnection(response, followUp.url())) {
+            if (!sameConnection(response, followUp.url())) {//不是相同的请求   重新生成一个 StreamAllocation对象
                 streamAllocation.release();
                 streamAllocation = new StreamAllocation(
                         client.connectionPool(), createAddress(followUp.url()), callStackTrace);
@@ -265,7 +272,8 @@ public final class RetryAndFollowUpInterceptor implements Interceptor {
      * follow-up is either unnecessary or not applicable, this returns null.
      */
     private Request followUpRequest(Response userResponse) throws IOException {
-        if (userResponse == null) throw new IllegalStateException();
+        if (userResponse == null)
+            throw new IllegalStateException();
         Connection connection = streamAllocation.connection();
         Route route = connection != null
                 ? connection.route()
@@ -273,8 +281,19 @@ public final class RetryAndFollowUpInterceptor implements Interceptor {
         int responseCode = userResponse.code();
 
         final String method = userResponse.request().method();
+        //根据状态码做不同响应
+        //状态码 wiki: https://zh.wikipedia.org/wiki/HTTP%E7%8A%B6%E6%80%81%E7%A0%81
         switch (responseCode) {
-            case HTTP_PROXY_AUTH:
+            /**
+             * 类似于403 Forbidden，401语义即“未认证”，即用户没有必要的凭据。[32]该状态码表示当前请求需要用户验证。该响应必须包含一个适用于被请求资源的WWW-Authenticate信息头用以询问用户信息。客户端可以重复提交一个包含恰当的Authorization头信息的请求。[33]如果当前请求已经包含了Authorization证书，那么401响应代表着服务器验证已经拒绝了那些证书。如果401响应包含了与前一个响应相同的身份验证询问，且浏览器已经至少尝试了一次验证，那么浏览器应当向用户展示响应中包含的实体信息，因为这个实体信息中可能包含了相关诊断信息。
+             注意：当网站（通常是网站域名）禁止IP地址时，有些网站状态码显示的401，表示该特定地址被拒绝访问网站
+             */
+            case HTTP_UNAUTHORIZED://401
+                return client.authenticator().authenticate(route, userResponse);
+            /**
+             *407  响应类似，只不过客户端必须在代理服务器上进行身份验证。代理服务器必须返回一个Proxy-Authenticate用以进行身份询问。客户端可以返回一个Proxy-Authorization信息头用以验证。
+              */
+            case HTTP_PROXY_AUTH://407
                 Proxy selectedProxy = route != null
                         ? route.proxy()
                         : client.proxy();
@@ -283,46 +302,51 @@ public final class RetryAndFollowUpInterceptor implements Interceptor {
                 }
                 return client.proxyAuthenticator().authenticate(route, userResponse);
 
-            case HTTP_UNAUTHORIZED:
-                return client.authenticator().authenticate(route, userResponse);
-
-            case HTTP_PERM_REDIRECT:
-            case HTTP_TEMP_REDIRECT:
+            case HTTP_PERM_REDIRECT://308
+            case HTTP_TEMP_REDIRECT://307
                 // "If the 307 or 308 status code is received in response to a request other than GET
                 // or HEAD, the user agent MUST NOT automatically redirect the request"
                 if (!method.equals("GET") && !method.equals("HEAD")) {
                     return null;
                 }
                 // fall-through
-            case HTTP_MULT_CHOICE:
-            case HTTP_MOVED_PERM:
-            case HTTP_MOVED_TEMP:
-            case HTTP_SEE_OTHER:
+            case HTTP_MULT_CHOICE: //300
+            case HTTP_MOVED_PERM://301
+            case HTTP_MOVED_TEMP://302
+            case HTTP_SEE_OTHER://303
                 // Does the client allow redirects?
-                if (!client.followRedirects()) return null;
+                if (!client.followRedirects())//OkHttp自身配置是否允许重定向  默认 是允许的
+                    return null;
 
-                String location = userResponse.header("Location");
-                if (location == null) return null;
+                //请求需要重定向   发送二次请求代码
+
+                // Http协议规定 如果服务器本身已经有了首选的回馈选择，那么在Location中应当指明这个回馈的URI
+                String location = userResponse.header("Location");//取请求头中的 Location字段值
+                if (location == null)
+                    return null;
                 HttpUrl url = userResponse.request().url().resolve(location);
 
                 // Don't follow redirects to unsupported protocols.
-                if (url == null) return null;
+                if (url == null)
+                    return null;
 
                 // If configured, don't follow redirects between SSL and non-SSL.
                 boolean sameScheme = url.scheme().equals(userResponse.request().url().scheme());
-                if (!sameScheme && !client.followSslRedirects()) return null;
+                if (!sameScheme && !client.followSslRedirects())
+                    return null;
 
+                //http 重定向为https  or  https重定向为http    控件自身配置也支持SSL跳转
                 // Most redirects don't include a request body.
                 Request.Builder requestBuilder = userResponse.request().newBuilder();
                 if (HttpMethod.permitsRequestBody(method)) {
-                    final boolean maintainBody = HttpMethod.redirectsWithBody(method);
+                    final boolean maintainBody = HttpMethod.redirectsWithBody(method);//是否需要维持请求体 仅仅 PROPFIND      WebDAV 协议需要
                     if (HttpMethod.redirectsToGet(method)) {
                         requestBuilder.method("GET", null);
                     } else {
                         RequestBody requestBody = maintainBody ? userResponse.request().body() : null;
                         requestBuilder.method(method, requestBody);
                     }
-                    if (!maintainBody) {
+                    if (!maintainBody) {//请求体不保留  删掉原来head中的body描述字段
                         requestBuilder.removeHeader("Transfer-Encoding");
                         requestBuilder.removeHeader("Content-Length");
                         requestBuilder.removeHeader("Content-Type");
@@ -338,19 +362,19 @@ public final class RetryAndFollowUpInterceptor implements Interceptor {
 
                 return requestBuilder.url(url).build();
 
-            case HTTP_CLIENT_TIMEOUT:
+            case HTTP_CLIENT_TIMEOUT://408
+                //请求超时。根据HTTP规范，客户端没有在服务器预备等待的时间内完成一个请求的发送，客户端可以随时再次提交这一请求而无需进行任何更改
+
                 // 408's are rare in practice, but some servers like HAProxy use this response code. The
                 // spec says that we may repeat the request without modifications. Modern browsers also
                 // repeat the request (even non-idempotent ones.)
                 if (userResponse.request().body() instanceof UnrepeatableRequestBody) {
                     return null;
                 }
-
                 return userResponse.request();
-
             default:
                 return null;
-        }
+        }//end switch
     }
 
     /**

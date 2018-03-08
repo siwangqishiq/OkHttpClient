@@ -95,7 +95,7 @@ public final class StreamAllocation {
         int connectTimeout = client.connectTimeoutMillis();
         int readTimeout = client.readTimeoutMillis();
         int writeTimeout = client.writeTimeoutMillis();
-        boolean connectionRetryEnabled = client.retryOnConnectionFailure();
+        boolean connectionRetryEnabled = client.retryOnConnectionFailure();//失败时 是否重试  默认可以重试
 
         try {
             RealConnection resultConnection = findHealthyConnection(connectTimeout, readTimeout,
@@ -148,9 +148,12 @@ public final class StreamAllocation {
                                           boolean connectionRetryEnabled) throws IOException {
         Route selectedRoute;
         synchronized (connectionPool) {
-            if (released) throw new IllegalStateException("released");
-            if (codec != null) throw new IllegalStateException("codec != null");
-            if (canceled) throw new IOException("Canceled");
+            if (released)
+                throw new IllegalStateException("released");
+            if (codec != null)
+                throw new IllegalStateException("codec != null");
+            if (canceled)
+                throw new IOException("Canceled");
 
             // Attempt to use an already-allocated connection.
             RealConnection allocatedConnection = this.connection;

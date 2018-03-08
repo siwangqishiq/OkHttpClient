@@ -67,56 +67,59 @@ public final class BridgeInterceptor implements Interceptor {
 
         RequestBody body = userRequest.body();
         if (body != null) {
+            //根据body   ---> contentType 设置 head中的内容
             MediaType contentType = body.contentType();
             if (contentType != null) {
                 requestBuilder.header("Content-Type", contentType.toString());
             }
 
+            //body 大小  设置head Content-Length  and
             long contentLength = body.contentLength();
             if (contentLength != -1) {
                 requestBuilder.header("Content-Length", Long.toString(contentLength));
                 requestBuilder.removeHeader("Transfer-Encoding");
-            } else {
+            } else {//body 长度 = -1
                 requestBuilder.header("Transfer-Encoding", "chunked");
                 requestBuilder.removeHeader("Content-Length");
             }
         }
 
-        if (userRequest.header("Host") == null) {
+        if (userRequest.header("Host") == null) {//HEAD中没有Host字段  Host填写url
             requestBuilder.header("Host", hostHeader(userRequest.url(), false));
         }
 
-        if (userRequest.header("Connection") == null) {
+        if (userRequest.header("Connection") == null) {//HEAD中没有Connection字段  自己填写     设置为Keep-Alive
             requestBuilder.header("Connection", "Keep-Alive");
         }
 
-        // If we add an "Accept-Encoding: gzip" header field we're responsible for also decompressing
-        // the transfer stream.
+        //自己添加了gzip的支持  需要自己解压gzip返回到流中
+        //Accept-Encoding 未设置 默认加上gzip
         boolean transparentGzip = false;
         if (userRequest.header("Accept-Encoding") == null && userRequest.header("Range") == null) {
             transparentGzip = true;
             requestBuilder.header("Accept-Encoding", "gzip");
         }
 
+        //获取本地保存的Cookie   默认Cookie机制未实现
         List<Cookie> cookies = cookieJar.loadForRequest(userRequest.url());
         if (!cookies.isEmpty()) {
             requestBuilder.header("Cookie", cookieHeader(cookies));
         }
 
+        //UA未设置   默认加上
         if (userRequest.header("User-Agent") == null) {
             requestBuilder.header("User-Agent", Version.userAgent());
         }
 
-        Response networkResponse = chain.proceed(requestBuilder.build());
-
-        HttpHeaders.receiveHeaders(cookieJar, userRequest.url(), networkResponse.headers());
-
+        Response networkResponse = chain.proceed(requestBuilder.build()); //调用后面的责任链
+        HttpHeaders.receiveHeaders(cookieJar, userRequest.url(), networkResponse.headers());//Cookie保存到本地   默认也没有实现
         Response.Builder responseBuilder = networkResponse.newBuilder()
                 .request(userRequest);
-
+        //处理 默认添加的压缩格式 gzip
         if (transparentGzip
                 && "gzip".equalsIgnoreCase(networkResponse.header("Content-Encoding"))
                 && HttpHeaders.hasBody(networkResponse)) {
+            //解压Gzip   生成新的Response
             GzipSource responseBody = new GzipSource(networkResponse.body().source());
             Headers strippedHeaders = networkResponse.headers().newBuilder()
                     .removeAll("Content-Encoding")

@@ -26,6 +26,8 @@ import okhttp3.internal.http.HttpCodec;
 import okhttp3.internal.http.RealInterceptorChain;
 
 /**
+ * streamAllocation.newStream 产生一个Http编码解码器
+ *
  * Opens a connection to the target server and proceeds to the next interceptor.
  * 负责和服务器建立连接
  */
@@ -43,9 +45,10 @@ public final class ConnectInterceptor implements Interceptor {
         StreamAllocation streamAllocation = realChain.streamAllocation();
 
         // We need the network to satisfy this request. Possibly for validating a conditional GET.
-        boolean doExtensiveHealthChecks = !request.method().equals("GET");
-        HttpCodec httpCodec = streamAllocation.newStream(client, doExtensiveHealthChecks);
-        RealConnection connection = streamAllocation.connection();
+
+        boolean doExtensiveHealthChecks = !request.method().equals("GET");//GET请求不做 网络是否健康的检查
+        HttpCodec httpCodec = streamAllocation.newStream(client, doExtensiveHealthChecks);//产生一个Http编码解码器
+        RealConnection connection = streamAllocation.connection();//连接服务端
 
         return realChain.proceed(request, streamAllocation, httpCodec, connection);
     }

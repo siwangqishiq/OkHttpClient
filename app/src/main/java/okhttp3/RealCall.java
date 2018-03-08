@@ -87,7 +87,8 @@ final class RealCall implements Call {
     @Override
     public void enqueue(Callback responseCallback) {
         synchronized (this) {
-            if (executed) throw new IllegalStateException("Already Executed");
+            if (executed)
+                throw new IllegalStateException("Already Executed");
             executed = true;
         }
         captureCallStackTrace();
@@ -184,8 +185,9 @@ final class RealCall implements Call {
         List<Interceptor> interceptors = new ArrayList<>();
         interceptors.addAll(client.interceptors());
         interceptors.add(retryAndFollowUpInterceptor);
-        interceptors.add(new BridgeInterceptor(client.cookieJar()));
-        interceptors.add(new CacheInterceptor(client.internalCache()));
+        interceptors.add(new BridgeInterceptor(client.cookieJar())); //Http Cookie状态更新  部分head字段 默认值填写
+        interceptors.add(new CacheInterceptor(client.internalCache()));//实现Http协议规定的缓存机制
+
         interceptors.add(new ConnectInterceptor(client));
         if (!forWebSocket) {
             interceptors.addAll(client.networkInterceptors());
