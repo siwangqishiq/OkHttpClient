@@ -1,5 +1,6 @@
 package com.xinlan.okhttpclient;
 
+import android.content.Context;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 
@@ -19,6 +20,8 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        Context c = this;
+
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -26,18 +29,18 @@ public class MainActivity extends AppCompatActivity {
                 Call call = mClient.newCall(req);
                 try {
                     Response response  = call.execute();
-                    call.enqueue(new Callback(){
-
-                        @Override
-                        public void onFailure(Call call, IOException e) {
-
-                        }
-
-                        @Override
-                        public void onResponse(Call call, Response response) throws IOException {
-
-                        }
-                    });
+//                    call.enqueue(new Callback(){
+//
+//                        @Override
+//                        public void onFailure(Call call, IOException e) {
+//
+//                        }
+//
+//                        @Override
+//                        public void onResponse(Call call, Response response) throws IOException {
+//
+//                        }
+//                    });
                     System.out.println("protocol--->"+response.protocol());
                 } catch (IOException e)  {
                     e.printStackTrace();

@@ -94,9 +94,9 @@ public final class RealInterceptorChain implements Interceptor.Chain {
                 interceptors, streamAllocation, httpCodec, connection, index + 1, request);
         Interceptor interceptor = interceptors.get(index);
 
-        System.out.println(interceptor.getClass()+"拦截器");
+        System.out.println(interceptor.getClass()+"拦截器start");
         Response response = interceptor.intercept(next);
-
+        System.out.println(interceptor.getClass()+"拦截器end ");
         // Confirm that the next interceptor made its required call to chain.proceed().
         if (httpCodec != null && index + 1 < interceptors.size() && next.calls != 1) {
             throw new IllegalStateException("network interceptor " + interceptor

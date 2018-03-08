@@ -400,6 +400,10 @@ public final class StreamAllocation {
         return connection != null ? connection.toString() : address.toString();
     }
 
+    /**
+     * 扩展弱引用类
+     *
+     */
     public static final class StreamAllocationReference extends WeakReference<StreamAllocation> {
         /**
          * Captures the stack trace at the time the Call is executed or enqueued. This is helpful for

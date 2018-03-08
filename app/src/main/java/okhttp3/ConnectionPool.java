@@ -232,7 +232,7 @@ public final class ConnectionPool {
                     longestIdleDurationNs = idleDurationNs;
                     longestIdleConnection = connection;
                 }
-            }//end for
+            }//end for each
 
             if (longestIdleDurationNs >= this.keepAliveDurationNs
                     || idleConnectionCount > this.maxIdleConnections) {

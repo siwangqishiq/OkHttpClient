@@ -45,6 +45,21 @@ public final class BridgeInterceptor implements Interceptor {
         this.cookieJar = cookieJar;
     }
 
+    /**
+     * Returns a 'Cookie' HTTP request header with all cookies, like {@code a=b; c=d}.
+     */
+    private String cookieHeader(List<Cookie> cookies) {
+        StringBuilder cookieHeader = new StringBuilder();
+        for (int i = 0, size = cookies.size(); i < size; i++) {
+            if (i > 0) {
+                cookieHeader.append("; ");
+            }
+            Cookie cookie = cookies.get(i);
+            cookieHeader.append(cookie.name()).append('=').append(cookie.value());
+        }
+        return cookieHeader.toString();
+    }
+
     @Override
     public Response intercept(Chain chain) throws IOException {
         Request userRequest = chain.request();
@@ -99,7 +114,7 @@ public final class BridgeInterceptor implements Interceptor {
         Response.Builder responseBuilder = networkResponse.newBuilder()
                 .request(userRequest);
 
-         if (transparentGzip
+        if (transparentGzip
                 && "gzip".equalsIgnoreCase(networkResponse.header("Content-Encoding"))
                 && HttpHeaders.hasBody(networkResponse)) {
             GzipSource responseBody = new GzipSource(networkResponse.body().source());
@@ -112,20 +127,5 @@ public final class BridgeInterceptor implements Interceptor {
         }
 
         return responseBuilder.build();
-    }
-
-    /**
-     * Returns a 'Cookie' HTTP request header with all cookies, like {@code a=b; c=d}.
-     */
-    private String cookieHeader(List<Cookie> cookies) {
-        StringBuilder cookieHeader = new StringBuilder();
-        for (int i = 0, size = cookies.size(); i < size; i++) {
-            if (i > 0) {
-                cookieHeader.append("; ");
-            }
-            Cookie cookie = cookies.get(i);
-            cookieHeader.append(cookie.name()).append('=').append(cookie.value());
-        }
-        return cookieHeader.toString();
     }
 }
