@@ -47,10 +47,10 @@ public final class CallServerInterceptor implements Interceptor {
         Request request = realChain.request();
 
         long sentRequestMillis = System.currentTimeMillis();
-        httpCodec.writeRequestHeaders(request);
+        httpCodec.writeRequestHeaders(request);//写请求头
 
         Response.Builder responseBuilder = null;
-        if (HttpMethod.permitsRequestBody(request.method()) && request.body() != null) {
+        if (HttpMethod.permitsRequestBody(request.method()) && request.body() != null) {//写请求体
             // If there's a "Expect: 100-continue" header on the request, wait for a "HTTP/1.1 100
             // Continue" response before transmitting the request body. If we don't get that, return what
             // we did get (such as a 4xx response) without ever transmitting the request body.
@@ -72,9 +72,9 @@ public final class CallServerInterceptor implements Interceptor {
                 streamAllocation.noNewStreams();
             }
         }
-
         httpCodec.finishRequest();
 
+        //读响应头
         if (responseBuilder == null) {
             responseBuilder = httpCodec.readResponseHeaders(false);
         }
@@ -92,7 +92,7 @@ public final class CallServerInterceptor implements Interceptor {
             response = response.newBuilder()
                     .body(Util.EMPTY_RESPONSE)
                     .build();
-        } else {
+        } else {//读响应体
             response = response.newBuilder()
                     .body(httpCodec.openResponseBody(response))
                     .build();
@@ -103,11 +103,10 @@ public final class CallServerInterceptor implements Interceptor {
             streamAllocation.noNewStreams();
         }
 
-        if ((code == 204 || code == 205) && response.body().contentLength() > 0) {
+        if ((code == 204 || code == 205) && response.body().contentLength() > 0) {//204 205 服务端没有返回请求 但响应体中存在内容
             throw new ProtocolException(
                     "HTTP " + code + " had non-zero Content-Length: " + response.body().contentLength());
         }
-
         return response;
     }
 }
