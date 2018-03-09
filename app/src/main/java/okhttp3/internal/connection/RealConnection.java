@@ -89,8 +89,8 @@ public final class RealConnection extends Http2Connection.Listener implements Co
     private Handshake handshake;
     private Protocol protocol;
     private Http2Connection http2Connection;
-    private BufferedSource source;
-    private BufferedSink sink;
+    private BufferedSource source; //Read  从服务端读数据
+    private BufferedSink sink;//Writer    从服务端写数据
 
     // The fields below track connection state and are guarded by connectionPool.
 
@@ -122,17 +122,27 @@ public final class RealConnection extends Http2Connection.Listener implements Co
         this.route = route;
     }
 
-    public static RealConnection testConnection(
-            ConnectionPool connectionPool, Route route, Socket socket, long idleAtNanos) {
-        RealConnection result = new RealConnection(connectionPool, route);
-        result.socket = socket;
-        result.idleAtNanos = idleAtNanos;
-        return result;
-    }
+//    public static RealConnection testConnection(
+//            ConnectionPool connectionPool, Route route, Socket socket, long idleAtNanos) {
+//        RealConnection result = new RealConnection(connectionPool, route);
+//        result.socket = socket;
+//        result.idleAtNanos = idleAtNanos;
+//        return result;
+//    }
 
+    /**
+     * 创建Socket 连接Server
+     *
+     *
+     * @param connectTimeout
+     * @param readTimeout
+     * @param writeTimeout
+     * @param connectionRetryEnabled
+     */
     public void connect(
             int connectTimeout, int readTimeout, int writeTimeout, boolean connectionRetryEnabled) {
-        if (protocol != null) throw new IllegalStateException("already connected");
+        if (protocol != null)
+            throw new IllegalStateException("already connected");
 
         RouteException routeException = null;
         List<ConnectionSpec> connectionSpecs = route.address().connectionSpecs();
@@ -220,18 +230,22 @@ public final class RealConnection extends Http2Connection.Listener implements Co
 
     /**
      * Does all the work necessary to build a full HTTP or HTTPS connection on a raw socket.
+     *
+     * Socket连接
+     *
      */
     private void connectSocket(int connectTimeout, int readTimeout) throws IOException {
         Proxy proxy = route.proxy();
         Address address = route.address();
 
+        //生成Socket
         rawSocket = proxy.type() == Proxy.Type.DIRECT || proxy.type() == Proxy.Type.HTTP
                 ? address.socketFactory().createSocket()
                 : new Socket(proxy);
 
-        rawSocket.setSoTimeout(readTimeout);
+        rawSocket.setSoTimeout(readTimeout);//依据参数 设置Socket超时时间
         try {
-            Platform.get().connectSocket(rawSocket, route.socketAddress(), connectTimeout);
+            Platform.get().connectSocket(rawSocket, route.socketAddress(), connectTimeout);//Socket连接服务端
         } catch (ConnectException e) {
             ConnectException ce = new ConnectException("Failed to connect to " + route.socketAddress());
             ce.initCause(e);
@@ -244,13 +258,13 @@ public final class RealConnection extends Http2Connection.Listener implements Co
     }
 
     private void establishProtocol(ConnectionSpecSelector connectionSpecSelector) throws IOException {
-        if (route.address().sslSocketFactory() == null) {
+        if (route.address().sslSocketFactory() == null) {//若SSLSocket工厂类未提供   直接默认为http1.1协议
             protocol = Protocol.HTTP_1_1;
             socket = rawSocket;
             return;
         }
 
-        connectTls(connectionSpecSelector);
+        connectTls(connectionSpecSelector);//协议判断
 
         if (protocol == Protocol.HTTP_2) {
             socket.setSoTimeout(0); // HTTP/2 connection timeouts are set per-stream.
@@ -262,6 +276,11 @@ public final class RealConnection extends Http2Connection.Listener implements Co
         }
     }
 
+    /**
+     * 使用协议判断
+     * @param connectionSpecSelector
+     * @throws IOException
+     */
     private void connectTls(ConnectionSpecSelector connectionSpecSelector) throws IOException {
         Address address = route.address();
         SSLSocketFactory sslSocketFactory = address.sslSocketFactory();

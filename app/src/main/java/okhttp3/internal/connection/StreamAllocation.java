@@ -84,6 +84,7 @@ public final class StreamAllocation {
     private boolean canceled;
     private HttpCodec codec;
 
+    //
     public StreamAllocation(ConnectionPool connectionPool, Address address, Object callStackTrace) {
         this.connectionPool = connectionPool;
         this.address = address;
@@ -114,6 +115,9 @@ public final class StreamAllocation {
     /**
      * Finds a connection and returns it if it is healthy. If it is unhealthy the process is repeated
      * until a healthy connection is found.
+     * 在已有资源里 找到合适的连接 如果没有 自己创建连接
+     *
+     *
      */
     private RealConnection findHealthyConnection(int connectTimeout, int readTimeout,
                                                  int writeTimeout, boolean connectionRetryEnabled, boolean doExtensiveHealthChecks)
@@ -131,7 +135,7 @@ public final class StreamAllocation {
 
             // Do a (potentially slow) check to confirm that the pooled connection is still good. If it
             // isn't, take it out of the pool and start again.
-            if (!candidate.isHealthy(doExtensiveHealthChecks)) {
+            if (!candidate.isHealthy(doExtensiveHealthChecks)) {//检测连接是否健康 如果不健康 将连接资源回收 重新创建一个新的
                 noNewStreams();
                 continue;
             }
@@ -162,7 +166,7 @@ public final class StreamAllocation {
             }
 
             // Attempt to get a connection from the pool.
-            Internal.instance.get(connectionPool, address, this, null);
+            Internal.instance.get(connectionPool, address, this, null);//从连接池取连接
             if (connection != null) {
                 return connection;
             }
@@ -170,6 +174,7 @@ public final class StreamAllocation {
             selectedRoute = route;
         }
 
+        //连接池没有取到需要的连接
         // If we need a route, make one. This is a blocking operation.
         if (selectedRoute == null) {
             selectedRoute = routeSelector.next();
@@ -177,13 +182,18 @@ public final class StreamAllocation {
 
         RealConnection result;
         synchronized (connectionPool) {
-            if (canceled) throw new IOException("Canceled");
+            if (canceled)
+                throw new IOException("Canceled");
 
             // Now that we have an IP address, make another attempt at getting a connection from the pool.
             // This could match due to connection coalescing.
+            //换个路由 再取一次
             Internal.instance.get(connectionPool, address, this, selectedRoute);
-            if (connection != null) return connection;
+            if (connection != null)
+                return connection;
 
+            //还是没取到连接
+            //创建一个连接 并将它放入到连接池中
             // Create a connection and assign it to this allocation immediately. This makes it possible
             // for an asynchronous cancel() to interrupt the handshake we're about to do.
             route = selectedRoute;
@@ -194,12 +204,12 @@ public final class StreamAllocation {
 
         // Do TCP + TLS handshakes. This is a blocking operation.
         result.connect(connectTimeout, readTimeout, writeTimeout, connectionRetryEnabled);
-        routeDatabase().connected(result.route());
+        routeDatabase().connected(result.route());//更新路由记录表黑名单 此时连接创建成功了 所以从黑名单中移除
 
         Socket socket = null;
         synchronized (connectionPool) {
             // Pool the connection.
-            Internal.instance.put(connectionPool, result);
+            Internal.instance.put(connectionPool, result);//新创建的连接 加入到连接池中
 
             // If another multiplexed connection to the same address was created concurrently, then
             // release this connection and acquire that one.
@@ -350,7 +360,8 @@ public final class StreamAllocation {
      */
     public void acquire(RealConnection connection) {
         assert (Thread.holdsLock(connectionPool));
-        if (this.connection != null) throw new IllegalStateException();
+        if (this.connection != null)
+            throw new IllegalStateException();
 
         this.connection = connection;
         connection.allocations.add(new StreamAllocationReference(this, callStackTrace));
